@@ -37,24 +37,22 @@ const COMMANDS = [
 
 // Generate evenly distributed positions across the full page
 // Use a seeded-like deterministic spread so they don't cluster
-const ROWS = 8
+const ROWS = 16
 const COLS = 5
 const ITEMS = ROWS * COLS
 
 const staticCmds = Array.from({ length: ITEMS }, (_, i) => {
   const col = i % COLS
   const row = Math.floor(i / COLS)
-  // spread within each cell with a small offset so it looks natural not grid-like
-  const offsetX = ((i * 137) % 18) - 9   // pseudo-random offset -9 to +9 %
+  const offsetX = ((i * 137) % 18) - 9
   const offsetY = ((i * 97)  % 14) - 7
   return {
     text: COMMANDS[i % COMMANDS.length],
-    // left as percentage of viewport width
-    left: (col / COLS) * 90 + 5 + offsetX,
-    // top as percentage of total scroll height — spread over 800vh equivalent
-    top: (row / ROWS) * 100 + (100 / ROWS / 2) + offsetY,
+    left: (col / COLS) * 88 + 4 + offsetX,
+    // spread over 800vh so commands appear throughout the whole scrollable page
+    top: (row / ROWS) * 800 + (800 / ROWS / 2) + offsetY,
     amber: i % 6 === 0,
-    glitchDelay: (i * 1.3) % 12,   // seconds between glitch triggers
+    glitchDelay: (i * 1.3) % 12,
     glitchDuration: 0.08 + (i % 3) * 0.04,
   }
 })
@@ -62,7 +60,7 @@ const staticCmds = Array.from({ length: ITEMS }, (_, i) => {
 export default function AmbientBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  // Canvas: binary rain only
+  // Canvas: circuit corner traces only — no rain
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -77,17 +75,8 @@ export default function AmbientBackground() {
     resize()
     window.addEventListener('resize', resize)
 
-    const COL_W = 18
-    type RainCol = { y: number; speed: number; len: number }
-    const mkCol = (): RainCol => ({
-      y: Math.random() * -(H / COL_W),
-      speed: 0.3 + Math.random() * 0.5,
-      len: 8 + Math.floor(Math.random() * 14),
-    })
-    let rain: RainCol[] = Array.from({ length: Math.floor(W / COL_W) }, mkCol)
-
-    // Circuit corner traces
     const drawTraces = () => {
+      ctx.clearRect(0, 0, W, H)
       ctx.strokeStyle = 'rgba(79,209,197,0.08)'
       ctx.lineWidth = 1
       const shapes = [
@@ -109,41 +98,9 @@ export default function AmbientBackground() {
       })
     }
 
-    let rafId: number
-    const draw = () => {
-      ctx.clearRect(0, 0, W, H)
-      drawTraces()
-
-      // Rebuild rain array on resize
-      if (rain.length !== Math.floor(W / COL_W)) {
-        rain = Array.from({ length: Math.floor(W / COL_W) }, mkCol)
-      }
-
-      ctx.font = `${COL_W - 3}px IBM Plex Mono, monospace`
-      rain.forEach((col, i) => {
-        const x = i * COL_W
-        for (let r = 0; r < col.len; r++) {
-          const cy = (col.y + r) * COL_W
-          if (cy < 0 || cy > H) continue
-          const isHead = r === 0
-          const fade = 1 - r / col.len
-          ctx.fillStyle = isHead
-            ? `rgba(220,255,252,0.5)`
-            : `rgba(79,209,197,${0.1 * fade})`
-          ctx.fillText(Math.random() > 0.5 ? '1' : '0', x, cy)
-        }
-        col.y += col.speed
-        if (col.y * COL_W > H + col.len * COL_W) {
-          col.y = -col.len - Math.random() * 10
-          col.speed = 0.3 + Math.random() * 0.5
-          col.len = 8 + Math.floor(Math.random() * 14)
-        }
-      })
-
-      rafId = requestAnimationFrame(draw)
-    }
-    rafId = requestAnimationFrame(draw)
-    return () => { cancelAnimationFrame(rafId); window.removeEventListener('resize', resize) }
+    drawTraces()
+    window.addEventListener('resize', drawTraces)
+    return () => { window.removeEventListener('resize', resize); window.removeEventListener('resize', drawTraces) }
   }, [])
 
   return (

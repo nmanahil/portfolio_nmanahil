@@ -125,6 +125,14 @@ export const projects: ProjectEntry[] = [
     status: 'Shipped',
   },
   {
+    id: 'deepfake-detector',
+    name: 'AI Deepfake Detector',
+    description:
+      'Machine learning system to detect AI-generated deepfake images and videos using convolutional neural networks and frequency-domain analysis. Trained on real vs. synthetic media datasets with a focus on facial manipulation detection.',
+    tags: ['Python', 'PyTorch', 'CNN', 'Computer Vision', 'Deep Learning', 'AI'],
+    status: 'In Progress',
+  },
+  {
     id: 'ai-support',
     name: 'AI Support Assistant',
     description:
