@@ -86,7 +86,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'messages-2023-12-15',
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
@@ -100,7 +99,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }),
     })
 
-    if (!response.ok) throw new Error(`Anthropic error: ${response.status}`)
+    if (!response.ok) {
+      const errBody = await response.text()
+      console.error('Anthropic error:', response.status, errBody)
+      throw new Error(`Anthropic error: ${response.status}`)
+    }
 
     const reader = response.body?.getReader()
     const decoder = new TextDecoder()
