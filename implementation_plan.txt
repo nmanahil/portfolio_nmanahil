@@ -1,0 +1,258 @@
+# Manahil Nawaz — Portfolio Website: Implementation Plan
+
+**Concept:** "Access Console" — an IAM/cybersecurity-themed portfolio, told as a scroll-driven
+story through a live security console, ending in an AI chatbot that answers questions about
+you using your actual resume as its source of truth.
+
+This plan is written in iterations. Each iteration has a goal, a task checklist, and a
+ready-to-paste prompt block you can hand directly to a VS Code AI coding assistant
+(Copilot Chat, Cursor, Cline, Windsurf, etc.). Do them in order — each one builds on the last.
+
+---
+
+## Tech stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| Framework | **React + Vite + TypeScript** | Fast dev server, simple deploy, no server needed for the site itself |
+| Styling | **Tailwind CSS** | Matches the token-based design system (colors/type/spacing as variables) |
+| Scroll storytelling | **GSAP + ScrollTrigger** | Industry-standard for scroll-linked animation/pinning, better than Framer Motion for this specific "scrollytelling" effect |
+| Micro-interactions | **Framer Motion** | Hover states, card expand/collapse, reveal-on-mount |
+| 3D | **React Three Fiber + drei** | React-idiomatic wrapper around Three.js, lets 3D respond to scroll state cleanly |
+| Content | **Single TypeScript data file** (`resume.ts`) | One source of truth — every section and the chatbot read from the same file |
+| Chatbot backend | **Vercel Serverless Function (Edge or Node)** calling the **Anthropic API** | Keeps your API key server-side, never exposed to the browser |
+| Chatbot streaming | **Server-Sent Events (SSE)** from the function to the client | Word-by-word response like a real chat product |
+| Deployment | **Vercel** (GitHub-connected, auto-deploy on push) | Free tier covers both the static site and the serverless chatbot function |
+| Package manager | **pnpm** (or npm if your AI assistant prefers) | Fast installs |
+
+---
+
+## Iteration 0 — Project setup & foundations
+
+**Goal:** empty but correctly-configured project, deployable from commit one.
+
+- [ ] Scaffold with Vite (`react-ts` template)
+- [ ] Install and configure Tailwind CSS with the design tokens below as custom theme values
+- [ ] Install `gsap`, `framer-motion`, `three`, `@react-three/fiber`, `@react-three/drei`
+- [ ] Set up folder structure:
+  ```
+  src/
+    components/
+      sections/       (one file per scroll section)
+      three/          (3D scene components)
+      chatbot/
+      ui/             (buttons, chips, cards — shared primitives)
+    data/
+      resume.ts       (single source of truth, typed)
+    hooks/
+    styles/
+  api/
+    chat.ts           (serverless function for the chatbot)
+  ```
+- [ ] Push to a new GitHub repo, connect to Vercel, confirm a blank deploy works end-to-end before writing real code
+
+**Design tokens to bake into `tailwind.config.ts`:**
+```
+colors: {
+  ink: '#0A0F14', panel: '#101922', panel2: '#141F29', line: '#1E2C38',
+  cyan: '#4FD1C5', cyanDim: '#2C6B67', amber: '#E8A94C',
+  text: '#E7EDF0', muted: '#7C8A93', danger: '#E4574C'
+}
+fontFamily: {
+  mono: ['IBM Plex Mono', 'monospace'],
+  sans: ['IBM Plex Sans', 'sans-serif']
+}
+```
+
+> **Prompt for your VS Code AI:**
+> "Scaffold a Vite + React + TypeScript project. Install and configure Tailwind CSS with this
+> custom theme: [paste tokens above]. Install gsap, framer-motion, three,
+> @react-three/fiber, @react-three/drei. Create this folder structure: [paste structure above].
+> Set up ESLint + Prettier with sensible defaults. Do not write any component logic yet —
+> just the scaffold."
+
+---
+
+## Iteration 1 — Content data model
+
+**Goal:** every fact from the CV lives in one typed file, so the site and chatbot never drift apart.
+
+- [ ] Create `src/data/resume.ts` exporting typed objects: `profile`, `experience[]`,
+      `projects[]`, `skills[]` (grouped by cluster), `certifications[]`, `leadership[]`, `contact`
+- [ ] Type every array element (e.g. `ExperienceEntry { org, role, dateRange, status, bullets[] }`)
+- [ ] This file is also what gets serialized into the chatbot's system prompt later — so write it
+      once, correctly, now
+
+> **Prompt for your VS Code AI:**
+> "Create `src/data/resume.ts`. Define TypeScript interfaces for Profile, ExperienceEntry,
+> ProjectEntry, SkillCluster, and ContactInfo. Then export a single typed object populated
+> with this resume data: [paste your full CV text]. Keep the data pure — no JSX, no styling,
+> just structured data other components will consume."
+
+---
+
+## Iteration 2 — Scrollytelling shell & navigation
+
+**Goal:** the skeleton that every section will live inside, with scroll-linked progress state.
+
+- [ ] Build a `<ScrollProgress>` context/hook using GSAP ScrollTrigger that tracks which section
+      is active (used to update the status bar and to drive the 3D scene later)
+- [ ] Build the sticky status bar (system status + section nav) from the current single-file
+      version — port it to a `<StatusBar>` component that highlights the active section
+- [ ] Build a `<Section>` wrapper primitive (consistent padding, eyebrow label, heading) so every
+      content section is visually consistent without repeating markup
+- [ ] Wire up smooth-scroll navigation from the status bar links
+
+> **Prompt for your VS Code AI:**
+> "Build a ScrollProgress context using GSAP ScrollTrigger that exposes the id of the
+> currently-active section as scroll position changes. Build a sticky StatusBar component
+> that reads this context and highlights the active nav link. Build a reusable Section
+> wrapper component that takes `eyebrow`, `title`, `description`, and `children` props and
+> renders them with consistent spacing using Tailwind."
+
+---
+
+## Iteration 3 — Convert existing sections to scroll-driven React components
+
+**Goal:** every CV section becomes its own component, animated in as the user scrolls — this is
+the "explaining all my CV details as you scroll" part.
+
+Build these as separate components, each reading only from `resume.ts`:
+
+- [ ] `<Hero>` — terminal boot sequence (typewriter effect) + headline, ports from the existing prototype
+- [ ] `<ClearanceCard>` — About section as an ID badge
+- [ ] `<SkillNetwork>` — the node-graph, but now each cluster/node **animates into position on
+      scroll** (GSAP timeline triggered by ScrollTrigger) instead of rendering static
+- [ ] `<AuditLog>` — Experience timeline; each entry's bullets type/fade in as it scrolls into view
+- [ ] `<CaseFiles>` — Projects, expandable cards (Framer Motion `AnimatePresence` for the expand)
+- [ ] `<ClearanceTokens>` — Certifications as chips, staggered fade-in
+- [ ] `<LeadershipStrip>`
+- [ ] `<SecureTransmission>` — Contact form
+- [ ] Each section's scroll-in animation should be **built once as a shared `useScrollReveal`
+      hook**, not copy-pasted per component
+
+> **Prompt for your VS Code AI:**
+> "Create a `useScrollReveal` hook using GSAP ScrollTrigger that fades and slides an element
+> in when it enters the viewport, returning a ref to attach. Then build these components,
+> each consuming `resume.ts` and using `useScrollReveal` for their entrance animation:
+> [list the components above with one-line descriptions of each]."
+
+---
+
+## Iteration 4 — 3D layer tied to scroll
+
+**Goal:** the 3D access-token isn't just a hero decoration — it responds to which section is active.
+
+- [ ] Port the existing Three.js hero object into a React Three Fiber `<AccessToken>` component
+- [ ] Keep it mounted for the whole page (fixed-position canvas layered behind/beside content,
+      not just in the hero) so it persists as a "living" element
+- [ ] Subscribe it to the `ScrollProgress` context: change its rotation speed, color accent, or
+      camera distance depending on the active section (e.g. it "locks" visually when the user
+      reaches Certifications — a small narrative beat, not just decoration)
+- [ ] Keep performance in mind: pause the render loop when the canvas isn't in view
+      (`IntersectionObserver` + `useFrame` gate)
+
+> **Prompt for your VS Code AI:**
+> "Convert this Three.js scene [paste the hero canvas JS from the existing prototype] into a
+> React Three Fiber component called AccessToken. It should read the active section id from
+> ScrollProgress context and interpolate its rotation speed and accent color based on which
+> section is active. Pause the render loop via useFrame when the canvas element is not
+> intersecting the viewport, using an IntersectionObserver."
+
+---
+
+## Iteration 5 — Chatbot: "Ask about me"
+
+**Goal:** a chat widget, grounded strictly in your resume data, that answers recruiter questions.
+
+### Architecture
+- The **system prompt** is generated server-side from `resume.ts` (imported into the API route),
+  so the chatbot's knowledge always matches the site's content — one source of truth.
+- The system prompt should explicitly instruct the model to **only answer from the provided
+  resume data**, decline unrelated questions, and speak in first person as if it were a
+  concise assistant representing you (not impersonating you as "I", but rather "Based on
+  Manahil's background...").
+- The API key lives in a Vercel environment variable, **never** in client code.
+
+### Tasks
+- [ ] Create `api/chat.ts` as a Vercel serverless function
+- [ ] Function builds a system prompt from `resume.ts` + a short guardrail instruction
+- [ ] Function calls the Anthropic Messages API with streaming enabled, forwards the stream to
+      the client via SSE
+- [ ] Client-side `<ChatWidget>` component: floating button → expandable panel, message list,
+      input box, streaming text render
+- [ ] Seed the widget with 3–4 clickable suggested questions ("What's her IAM experience?",
+      "What projects has she shipped?", "Is she open to full-time roles?") so recruiters don't
+      face a blank box
+- [ ] Rate-limit the endpoint (simple IP-based counter, or Vercel's built-in options) so it
+      can't be abused as a free API proxy
+- [ ] Add a visible fallback message if the API call fails, styled consistently with the "system
+      log" tone of the rest of the site (e.g. "> connection interrupted — try again")
+
+> **Prompt for your VS Code AI (backend):**
+> "Create a Vercel serverless function at `api/chat.ts` (Node runtime). It should: import the
+> resume data object from `src/data/resume.ts`; build a system prompt instructing the model
+> to answer only using that data, in a helpful recruiter-facing tone, and to decline unrelated
+> questions; accept a POST body with a `messages` array (chat history); call the Anthropic
+> Messages API (model `claude-sonnet-4-6`) with streaming enabled; forward the stream to the
+> client as Server-Sent Events. Read the API key from `process.env.ANTHROPIC_API_KEY`. Add
+> basic in-memory rate limiting per IP (e.g. 10 requests per 10 minutes)."
+
+> **Prompt for your VS Code AI (frontend):**
+> "Create a ChatWidget component: a floating button fixed to the bottom-right of the screen
+> that expands into a chat panel. Style it consistent with the site's terminal aesthetic
+> (dark panel, cyan accents, monospace for system messages). It should POST the conversation
+> to `/api/chat`, read the SSE stream, and render the assistant's response token-by-token as
+> it arrives. Include 3-4 suggested-question chips above the input that populate it on click.
+> Handle and display a styled error state if the request fails."
+
+---
+
+## Iteration 6 — Responsiveness, accessibility, and polish
+
+- [ ] Test all breakpoints down to 360px width; the skill graph and audit log are the highest-risk
+      sections on mobile — the node-graph SVG will likely need a simplified mobile layout
+      (stacked list instead of radial graph) rather than just scaling down
+- [ ] Visible keyboard focus states on every interactive element (nav links, case cards, chat input)
+- [ ] `prefers-reduced-motion` media query: disable GSAP/Framer entrance animations and the 3D
+      auto-rotation, replace with instant-appear
+- [ ] Alt text / ARIA labels on the chatbot widget and SVG graph nodes
+- [ ] Lighthouse pass — target 90+ on Performance, Accessibility, Best Practices
+
+> **Prompt for your VS Code AI:**
+> "Audit this project for accessibility and responsiveness. Add a reduced-motion variant that
+> disables GSAP timelines, Framer Motion transitions, and the Three.js auto-rotation when
+> `prefers-reduced-motion: reduce` is set. Add visible focus rings to all interactive
+> elements. On viewports under 640px, replace the SkillNetwork radial SVG graph with a
+> stacked list grouped by cluster. Run through the site and fix any layout breakage below
+> 400px width."
+
+---
+
+## Iteration 7 — Deployment
+
+- [ ] Set `ANTHROPIC_API_KEY` as an environment variable in the Vercel project settings (never
+      committed to the repo)
+- [ ] Connect custom domain if you have one
+- [ ] Confirm the serverless function works in production (not just local dev — CORS and env
+      vars are the usual gotchas)
+- [ ] Add a simple `robots.txt` / meta tags (title, description, Open Graph image) so the link
+      previews well when you send it to recruiters
+
+> **Prompt for your VS Code AI:**
+> "Add SEO meta tags (title, description, Open Graph image, favicon) to index.html. Create a
+> robots.txt allowing all crawlers. Double check that api/chat.ts reads ANTHROPIC_API_KEY from
+> environment variables only, with no fallback or hardcoded key anywhere in the codebase."
+
+---
+
+## Notes for whoever picks this up
+
+- Do the iterations **in order** — iteration 3 depends on the data model from iteration 1 and
+  the scroll context from iteration 2; the chatbot in iteration 5 depends on the same data file.
+- Everything reads from `src/data/resume.ts`. If a fact needs to change, it changes once, there —
+  never hardcode resume content inside a component.
+- The 3D layer (iteration 4) is the single place it's worth spending extra time — it's the
+  signature element that makes this look bespoke rather than templated. Everything else should
+  stay disciplined and quiet around it.
+
